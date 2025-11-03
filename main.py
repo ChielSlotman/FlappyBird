@@ -1,4 +1,7 @@
-import pygame, sys, random 
+import asyncio
+import random
+
+import pygame
 
 def draw_floor():
 	screen.blit(floor_surface,(floor_x_pos,900))
@@ -178,87 +181,93 @@ death_sound = pygame.mixer.Sound('sound/sfx_hit.wav')
 score_sound = pygame.mixer.Sound('sound/sfx_point.wav')
 score_sound_countdown = 100
 
-while True:
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
-			pygame.quit()
-			sys.exit()
-		if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-			if not game_active and notification_icon_rect.collidepoint(event.pos):
-				if not notification_seen:
-					show_notification_message = True
-					notification_seen = True
+async def main():
+	global bird_movement, game_active, pipe_list, scored_pipes, next_pipe_with_head
+	global show_notification_message, notification_seen, bird_rect, score, floor_x_pos, bird_index, bird_surface, high_score
+	while True:
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				pygame.quit()
+				return
+			if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+				if not game_active and notification_icon_rect.collidepoint(event.pos):
+					if not notification_seen:
+						show_notification_message = True
+						notification_seen = True
+					else:
+						show_notification_message = not show_notification_message
+			if event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_SPACE and game_active:
+					bird_movement = 0
+					bird_movement -= 7.5
+					flap_sound.play()
+				if event.key == pygame.K_SPACE and game_active == False:
+					game_active = True
+					pipe_list.clear()
+					scored_pipes.clear()
+					next_pipe_with_head = False
+					show_notification_message = False
+					bird_rect.center = (100,512)
+					bird_movement = 0
+					score = 0
+
+			if event.type == SPAWNPIPE:
+				pipe_list.extend(create_pipe())
+
+			if event.type == BIRDFLAP:
+				if bird_index < 2:
+					bird_index += 1
 				else:
-					show_notification_message = not show_notification_message
-		if event.type == pygame.KEYDOWN:
-			if event.key == pygame.K_SPACE and game_active:
-				bird_movement = 0
-				bird_movement -= 7.5
-				flap_sound.play()
-			if event.key == pygame.K_SPACE and game_active == False:
-				game_active = True
-				pipe_list.clear()
-				scored_pipes.clear()
-				next_pipe_with_head = False
-				show_notification_message = False
-				bird_rect.center = (100,512)
-				bird_movement = 0
-				score = 0
+					bird_index = 0
 
-		if event.type == SPAWNPIPE:
-			pipe_list.extend(create_pipe())
+				bird_surface,bird_rect = bird_animation()
 
-		if event.type == BIRDFLAP:
-			if bird_index < 2:
-				bird_index += 1
-			else:
-				bird_index = 0
+		screen.blit(bg_surface,(0,0))
 
-			bird_surface,bird_rect = bird_animation()
+		if game_active:
+			# Bird
+			bird_movement += gravity
+			rotated_bird = rotate_bird(bird_surface)
+			bird_rect.centery += bird_movement
+			screen.blit(rotated_bird,bird_rect)
+			game_active = check_collision(pipe_list)
 
-	screen.blit(bg_surface,(0,0))
+			# Pipes
+			pipe_list = move_pipes(pipe_list)
+			pipe_list = remove_pipes(pipe_list)
+			draw_pipes(pipe_list)
 
-	if game_active:
-		# Bird
-		bird_movement += gravity
-		rotated_bird = rotate_bird(bird_surface)
-		bird_rect.centery += bird_movement
-		screen.blit(rotated_bird,bird_rect)
-		game_active = check_collision(pipe_list)
-
-		# Pipes
-		pipe_list = move_pipes(pipe_list)
-		pipe_list = remove_pipes(pipe_list)
-		draw_pipes(pipe_list)
-
-		# Score: add point only when bird passes a pipe
-		for pipe_img, pipe_rect in pipe_list:
-			if pipe_rect.centerx < bird_rect.left and (pipe_img, pipe_rect) not in scored_pipes and pipe_rect.bottom >= 1024:
-				score += 1
-				scored_pipes.append((pipe_img, pipe_rect))
-				score_sound.play()
-		score_display('main_game')
-	else:
-		if score >= 15:
-			screen.blit(success_surface,game_over_rect)
+			# Score: add point only when bird passes a pipe
+			for pipe_img, pipe_rect in pipe_list:
+				if pipe_rect.centerx < bird_rect.left and (pipe_img, pipe_rect) not in scored_pipes and pipe_rect.bottom >= 1024:
+					score += 1
+					scored_pipes.append((pipe_img, pipe_rect))
+					score_sound.play()
+			score_display('main_game')
 		else:
-			screen.blit(game_over_surface,game_over_rect)
-		high_score = update_score(score,high_score)
-		score_display('game_over')
-		if not notification_seen:
-			screen.blit(notification_hint,notification_hint_rect)
-			screen.blit(notification_badge,notification_badge_rect)
-			screen.blit(notification_icon,notification_icon_rect)
-		elif show_notification_message:
-			screen.blit(notification_panel,notification_panel_rect)
+			if score >= 15:
+				screen.blit(success_surface,game_over_rect)
+			else:
+				screen.blit(game_over_surface,game_over_rect)
+			high_score = update_score(score,high_score)
+			score_display('game_over')
+			if not notification_seen:
+				screen.blit(notification_hint,notification_hint_rect)
+				screen.blit(notification_badge,notification_badge_rect)
+				screen.blit(notification_icon,notification_icon_rect)
+			elif show_notification_message:
+				screen.blit(notification_panel,notification_panel_rect)
 
 
-	# Floor
-	floor_x_pos -= 1
-	draw_floor()
-	if floor_x_pos <= -576:
-		floor_x_pos = 0
-	
+		# Floor
+		floor_x_pos -= 1
+		draw_floor()
+		if floor_x_pos <= -576:
+			floor_x_pos = 0
+		
 
-	pygame.display.update()
-	clock.tick(120)
+		pygame.display.update()
+		clock.tick(120)
+		await asyncio.sleep(0)
+
+asyncio.run(main())
