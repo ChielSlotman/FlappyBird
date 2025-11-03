@@ -181,6 +181,39 @@ death_sound = pygame.mixer.Sound('sound/sfx_hit.wav')
 score_sound = pygame.mixer.Sound('sound/sfx_point.wav')
 score_sound_countdown = 100
 
+def trigger_flap():
+	bird_jump_strength = 7.5
+	global bird_movement
+	bird_movement = 0
+	bird_movement -= bird_jump_strength
+	flap_sound.play()
+
+def reset_game_state():
+	global game_active, pipe_list, scored_pipes, next_pipe_with_head
+	global show_notification_message, bird_rect, bird_movement, score
+	game_active = True
+	pipe_list.clear()
+	scored_pipes.clear()
+	next_pipe_with_head = False
+	show_notification_message = False
+	bird_rect.center = (100,512)
+	bird_movement = 0
+	score = 0
+
+def handle_primary_press(pos):
+	global show_notification_message, notification_seen
+	if game_active:
+		trigger_flap()
+		return
+	if notification_icon_rect.collidepoint(pos):
+		if not notification_seen:
+			show_notification_message = True
+			notification_seen = True
+		else:
+			show_notification_message = not show_notification_message
+	else:
+		reset_game_state()
+
 async def main():
 	global bird_movement, game_active, pipe_list, scored_pipes, next_pipe_with_head
 	global show_notification_message, notification_seen, bird_rect, score, floor_x_pos, bird_index, bird_surface, high_score
@@ -190,26 +223,15 @@ async def main():
 				pygame.quit()
 				return
 			if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-				if not game_active and notification_icon_rect.collidepoint(event.pos):
-					if not notification_seen:
-						show_notification_message = True
-						notification_seen = True
-					else:
-						show_notification_message = not show_notification_message
+				handle_primary_press(event.pos)
+			if event.type == pygame.FINGERDOWN:
+				finger_pos = (int(event.x * screen.get_width()), int(event.y * screen.get_height()))
+				handle_primary_press(finger_pos)
 			if event.type == pygame.KEYDOWN:
 				if event.key == pygame.K_SPACE and game_active:
-					bird_movement = 0
-					bird_movement -= 7.5
-					flap_sound.play()
+					trigger_flap()
 				if event.key == pygame.K_SPACE and game_active == False:
-					game_active = True
-					pipe_list.clear()
-					scored_pipes.clear()
-					next_pipe_with_head = False
-					show_notification_message = False
-					bird_rect.center = (100,512)
-					bird_movement = 0
-					score = 0
+					reset_game_state()
 
 			if event.type == SPAWNPIPE:
 				pipe_list.extend(create_pipe())
